@@ -18,5 +18,5 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: ruff check voxa tests
+      - run: ruff check voxa tests evals
       - run: pytest -q
