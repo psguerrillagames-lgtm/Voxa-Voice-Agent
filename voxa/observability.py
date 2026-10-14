@@ -34,6 +34,9 @@ class Span:
     data: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
 
+    def ms_so_far(self) -> float:
+        return round((time.perf_counter() - self.start) * 1000, 1)
+
 
 class Tracer:
     def __init__(self) -> None:
