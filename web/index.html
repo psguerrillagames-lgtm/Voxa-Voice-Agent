@@ -1,1 +1,164 @@
-<!doctype html><title>Voxa</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxa SRE</title>
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --line:#2a313c; --text:#e6edf3; --muted:#8b949e;
+          --accent:#7c5cff; --bad:#f85149; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; gap:10px;
+           align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0 12px 0 0; }
+  button { background:var(--panel); color:var(--text); border:1px solid var(--line);
+           border-radius:8px; padding:7px 12px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); }
+  main { display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:16px 20px; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+            padding:14px; min-width:0; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
+  .bubble { padding:10px 12px; border-radius:10px; margin:8px 0; max-width:92%; }
+  .voxa { background:#231d45; } .engineer { background:#1f2a1f; margin-left:auto; }
+  .who { font-size:11px; color:var(--muted); }
+  #trace { height:440px; overflow:auto; font:12px/1.45 ui-monospace, monospace; }
+  .ev { padding:3px 0; border-bottom:1px dashed var(--line); word-break:break-word; }
+  .tag { display:inline-block; min-width:90px; color:var(--accent); }
+  .err { color:var(--bad); }
+  .row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  input { flex:1; min-width:160px; background:var(--bg); color:var(--text); border:1px solid var(--line);
+          border-radius:8px; padding:8px; font:inherit; }
+  .stats { display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:12px; margin-top:10px; }
+  .stats b { color:var(--text); }
+  .state { padding:2px 8px; border-radius:99px; background:var(--line); font-size:12px; }
+  .ring { animation:ring 1s infinite; }
+  @keyframes ring { 50% { box-shadow:0 0 0 6px #7c5cff55; } }
+  pre { white-space:pre-wrap; margin:0; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Voxa · voice-first SRE</h1>
+  <span style="color:var(--muted)">Inject a fault:</span>
+  <span id="scenarios"></span>
+</header>
+<main>
+  <section>
+    <h2>Call <span id="state" class="state">idle</span></h2>
+    <div id="call"><p style="color:var(--muted)">Trigger a scenario. Voxa investigates, then calls you first.</p></div>
+    <div class="row">
+      <button id="mic">🎙 Hold to talk</button>
+      <input id="say" placeholder="…or type a reply, e.g. “yes, roll it back”">
+      <button id="send" class="primary">Send</button>
+    </div>
+    <h2 style="margin-top:16px">Diagnosis</h2>
+    <pre id="diag">—</pre>
+    <div class="stats" id="stats"></div>
+  </section>
+  <section>
+    <h2>Live agent trace</h2>
+    <div id="trace"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let incident = null, voiceOn = false;
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+function render(v) {
+  incident = v.id; voiceOn = v.voice;
+  $('state').textContent = v.state;
+  $('call').innerHTML = v.transcript.map(t =>
+    `<div class="bubble ${t.speaker}"><div class="who">${t.speaker === 'voxa' ? 'Voxa' : 'You'}</div>${esc(t.text)}</div>`).join('');
+  const d = v.diagnosis, a = v.proposed_action;
+  $('diag').textContent = d ? `${d.root_cause_service} · ${d.category} · confidence ${d.confidence}\n${d.summary}\n\n` +
+    `Evidence:\n- ${d.evidence.join('\n- ')}\n\nProposed: ${a.tool}(${a.service})` : '—';
+  const m = v.metrics;
+  $('stats').innerHTML = `<span>LLM calls <b>${m.llm_calls}</b></span><span>tool calls <b>${m.tool_calls}</b></span>` +
+    `<span>tokens <b>${m.input_tokens + m.output_tokens}</b></span><span>cost <b>$${m.cost_usd}</b></span>` +
+    `<span>actions <b>${v.audit.map(x => x.status).join(', ') || 'none'}</b></span>`;
+  if (voiceOn) new Audio(`/incidents/${incident}/speech?t=${Date.now()}`).play().catch(() => {});
+}
+
+async function trigger(name) {
+  incident = null; $('trace').innerHTML = ''; $('state').textContent = 'investigating';
+  $('call').innerHTML = '<p class="ring" style="padding:8px;border-radius:8px">📞 Voxa is investigating and will call you…</p>';
+  try { render(await api(`/scenarios/${name}/trigger`, { method: 'POST' })); }
+  catch (e) { $('call').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+async function sendReply(form) {
+  if (!incident) return;
+  try { render(await api(`/incidents/${incident}/reply`, { method: 'POST', body: form })); }
+  catch (e) { log('error', e.message, true); }
+}
+
+$('send').onclick = () => {
+  const text = $('say').value.trim(); if (!text) return;
+  const f = new FormData(); f.append('text', text); $('say').value = ''; sendReply(f);
+};
+$('say').onkeydown = (e) => { if (e.key === 'Enter') $('send').click(); };
+
+// Push-to-talk: record while held; the server transcribes with ElevenLabs STT.
+let rec, chunks = [];
+$('mic').onpointerdown = async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  rec = new MediaRecorder(stream); chunks = [];
+  rec.ondataavailable = (e) => chunks.push(e.data);
+  rec.onstop = () => {
+    stream.getTracks().forEach(t => t.stop());
+    const f = new FormData(); f.append('audio', new Blob(chunks, { type: 'audio/webm' }), 'reply.webm');
+    sendReply(f);
+  };
+  rec.start(); $('mic').classList.add('ring');
+};
+$('mic').onpointerup = () => { if (rec && rec.state === 'recording') rec.stop(); $('mic').classList.remove('ring'); };
+
+function log(tag, text, err) {
+  const el = document.createElement('div');
+  el.className = 'ev' + (err ? ' err' : '');
+  el.innerHTML = `<span class="tag">${esc(tag)}</span> ${esc(text)}`;
+  $('trace').appendChild(el); $('trace').scrollTop = 1e9;
+}
+
+function onEvent(e) {
+  if (incident && e.incident !== incident) return;
+  switch (e.type) {
+    case 'alert': log('🚨 alert', `${e.alert.service}: ${e.alert.summary}`); break;
+    case 'plan': log('🧭 plan', e.plan.hypotheses.join(' | ')); break;
+    case 'thought': log(`💭 ${e.agent}`, e.text); break;
+    case 'span_start': if (e.kind === 'tool') log(`🔧 ${e.agent}`, `${e.name}(${JSON.stringify(e.data.args)})`); break;
+    case 'span_end':
+      if (e.kind === 'llm') log(`🧠 ${e.agent}`, `${e.name} ${e.ms}ms ${e.input_tokens}+${e.output_tokens} tok`);
+      if (e.error) log(`⚠ ${e.agent}`, e.error, true);
+      break;
+    case 'critique': log('🔍 critic', e.approved ? 'approved' : 'rejected: ' + e.issues.join('; '), !e.approved); break;
+    case 'diagnosis': log('✅ diagnosis', `${e.diagnosis.root_cause_service} / ${e.diagnosis.category}`); break;
+    case 'intent': log('👂 intent', e.intent); break;
+    case 'voxa_says': log('🗣 voxa', e.text); break;
+  }
+}
+
+function connect() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onmessage = (m) => onEvent(JSON.parse(m.data));
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+
+api('/scenarios').then(list => {
+  $('scenarios').innerHTML = list.map(s =>
+    `<button title="${esc(s.description)}" onclick="trigger('${s.name}')">${s.name.replace(/_/g, ' ')}</button>`).join(' ');
+});
+connect();
+</script>
+</body>
+</html>
