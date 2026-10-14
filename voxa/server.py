@@ -14,6 +14,7 @@ import itertools
 from pathlib import Path
 from typing import Annotated
 
+import anthropic
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -84,7 +85,16 @@ def create_app(llm_factory=None, memory: IncidentMemory | None = None,
         incident_id = next(ids)
         session = new_session(infra, incident_id)
         sessions[incident_id] = session
-        await session.start(alert)
+        try:
+            await session.start(alert)
+        except anthropic.AuthenticationError as exc:
+            raise HTTPException(503, "Anthropic rejected the API key. Check ANTHROPIC_API_KEY "
+                                     "in .env and restart the server.") from exc
+        except TypeError as exc:
+            if "authentication" not in str(exc):
+                raise
+            raise HTTPException(503, "No Anthropic API key. Put ANTHROPIC_API_KEY=... in .env "
+                                     "next to pyproject.toml and restart the server.") from exc
         return view(incident_id, session)
 
     @app.get("/")
