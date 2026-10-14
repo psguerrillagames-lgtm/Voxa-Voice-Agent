@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: voxa
+Version: 0.1.0
+Summary: Voice-first multi-agent SRE: Claude diagnoses incidents, ElevenLabs calls the on-call engineer.
+Requires-Python: >=3.11
+License-File: LICENSE
+Requires-Dist: anthropic>=0.70
+Requires-Dist: fastapi>=0.115
+Requires-Dist: uvicorn[standard]>=0.30
+Requires-Dist: httpx>=0.27
+Requires-Dist: pydantic>=2.7
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: mcp>=1.2
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Dynamic: license-file
