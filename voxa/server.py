@@ -48,7 +48,7 @@ def create_app(llm_factory=None, memory: IncidentMemory | None = None,
     app = FastAPI(title="Voxa", version="0.1.0")
     hub = Hub()
     kb = KnowledgeBase.from_dir()
-    memory = memory or IncidentMemory(DATA_DIR / "memory.db")
+    memory = memory or IncidentMemory(settings.memory_db or DATA_DIR / "memory.db")
     sessions: dict[int, IncidentSession] = {}
     ids = itertools.count(1)
 

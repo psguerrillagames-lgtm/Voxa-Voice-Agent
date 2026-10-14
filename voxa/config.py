@@ -20,6 +20,7 @@ class Settings:
     # Voice needs fast turns; specialists are cheap read-only investigators.
     effort: str = os.getenv("VOXA_EFFORT", "low")
     dry_run: bool = _bool("VOXA_DRY_RUN", True)
+    memory_db: str = os.getenv("VOXA_MEMORY_DB", "")  # default: data/memory.db
     elevenlabs_api_key: str = os.getenv("ELEVENLABS_API_KEY", "")
     voice_id: str = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
     tts_model: str = os.getenv("ELEVENLABS_TTS_MODEL", "eleven_flash_v2_5")
